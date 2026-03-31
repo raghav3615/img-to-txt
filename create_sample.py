@@ -1,4 +1,4 @@
-"""Generate sample test images with multilingual text for OCR testing."""
+"""Generate sample test images with text for OCR testing."""
 
 import numpy as np
 

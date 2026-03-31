@@ -28,15 +28,11 @@ class OCREngine:
         if handwritten:
             return {
                 "paragraph": False,
-                "text_threshold": 0.4,
-                "low_text": 0.3,
-                "link_threshold": 0.4,
-                "width_ths": 3.0,
+                "width_ths": 1.5,
                 "ycenter_ths": 0.5,
                 "height_ths": 0.8,
-                "add_margin": 0.1,
                 "contrast_ths": 0.05,
-                "adjust_contrast": 0.5,
+                "adjust_contrast": 0.7,
             }
         return {}
 

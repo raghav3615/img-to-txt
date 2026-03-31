@@ -107,7 +107,9 @@ def process_single_image(
 ) -> list:
     if handwritten:
         processed = preprocessor.process_handwritten(image_path)
-        return engine.extract_text(processed, detail=detail, handwritten=True)
+        if processed is not None:
+            return engine.extract_text(processed, detail=detail, handwritten=True)
+        return engine.extract_from_file(image_path, detail=detail, handwritten=True)
 
     if preprocess_mode == "full":
         processed = preprocessor.process(image_path)

@@ -80,15 +80,49 @@ class ImagePreprocessor:
         clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
         return clahe.apply(image)
 
-    def remove_ruled_lines(self, image: np.ndarray) -> np.ndarray:
-        """Remove horizontal ruled lines from notebook/lined paper."""
-        horizontal_kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (image.shape[1] // 3, 1))
-        lines_mask = cv2.morphologyEx(image, cv2.MORPH_OPEN, horizontal_kernel, iterations=1)
-        _, lines_binary = cv2.threshold(lines_mask, 127, 255, cv2.THRESH_BINARY)
-        repair_kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (1, 3))
-        result = cv2.add(image, lines_binary)
-        result = np.clip(result, 0, 255).astype(np.uint8)
-        result = cv2.morphologyEx(result, cv2.MORPH_CLOSE, repair_kernel, iterations=1)
+    def sharpen(self, image: np.ndarray) -> np.ndarray:
+        kernel = np.array([[-1, -1, -1],
+                           [-1,  9, -1],
+                           [-1, -1, -1]])
+        return cv2.filter2D(image, -1, kernel)
+
+    def remove_colored_lines(self, image: np.ndarray) -> np.ndarray:
+        """Remove blue/red ruled lines from notebook paper using color masking in HSV."""
+        hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
+
+        blue_lower, blue_upper = np.array([90, 30, 100]), np.array([140, 255, 255])
+        blue_mask = cv2.inRange(hsv, blue_lower, blue_upper)
+
+        red_lower1, red_upper1 = np.array([0, 30, 100]), np.array([10, 255, 255])
+        red_lower2, red_upper2 = np.array([160, 30, 100]), np.array([180, 255, 255])
+        red_mask = cv2.bitwise_or(
+            cv2.inRange(hsv, red_lower1, red_upper1),
+            cv2.inRange(hsv, red_lower2, red_upper2),
+        )
+
+        lines_mask = cv2.bitwise_or(blue_mask, red_mask)
+
+        horizontal_kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (max(image.shape[1] // 8, 40), 1))
+        lines_mask = cv2.morphologyEx(lines_mask, cv2.MORPH_CLOSE, horizontal_kernel)
+        lines_mask = cv2.dilate(lines_mask, np.ones((3, 1), np.uint8), iterations=1)
+
+        result = image.copy()
+        result[lines_mask > 0] = [255, 255, 255]
+
+        repair_kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (3, 3))
+        gray_result = cv2.cvtColor(result, cv2.COLOR_BGR2GRAY)
+        gray_result = cv2.morphologyEx(gray_result, cv2.MORPH_CLOSE, repair_kernel)
+        return gray_result
+
+    def remove_ruled_lines_morph(self, image: np.ndarray) -> np.ndarray:
+        """Remove horizontal ruled lines using morphological operations (grayscale input)."""
+        inverted = cv2.bitwise_not(image)
+        horizontal_kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (image.shape[1] // 4, 1))
+        lines_only = cv2.morphologyEx(inverted, cv2.MORPH_OPEN, horizontal_kernel, iterations=1)
+        cleaned = cv2.subtract(inverted, lines_only)
+        result = cv2.bitwise_not(cleaned)
+        repair_kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (2, 2))
+        result = cv2.morphologyEx(result, cv2.MORPH_CLOSE, repair_kernel)
         return result
 
     def process(self, image_path: str) -> np.ndarray:
@@ -115,18 +149,28 @@ class ImagePreprocessor:
         image = self.enhance_contrast(image)
         return image
 
-    def process_handwritten(self, image_path: str) -> np.ndarray:
+    def _has_colored_lines(self, image: np.ndarray) -> bool:
+        """Detect if an image contains colored ruled lines (blue/red notebook lines)."""
+        hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
+        saturation = hsv[:, :, 1]
+        high_sat_ratio = np.mean(saturation > 40)
+        return high_sat_ratio > 0.06
+
+    def process_handwritten(self, image_path: str) -> np.ndarray | None:
         """Optimized for handwritten text on lined/plain paper.
 
-        Preserves stroke features while cleaning the background:
-        grayscale -> bilateral filter (edge-preserving smooth) -> CLAHE contrast.
-        Avoids binarization and heavy denoising to keep stroke texture intact
-        for the OCR model's neural network.
+        Adapts based on the image content:
+        - If colored ruled lines are detected (blue/red notebook lines), uses
+          per-pixel RGB minimum to suppress them while keeping dark ink.
+        - If no colored lines, returns None to signal that the raw file path
+          should be passed directly to EasyOCR (its internal PIL-based loading
+          preserves more detail for thin cursive strokes).
         """
         image = self.load_image(image_path)
         image = self.resize_image(image)
-        gray = self.to_grayscale(image)
-        filtered = cv2.bilateralFilter(gray, 9, 75, 75)
-        clahe = cv2.createCLAHE(clipLimit=3.0, tileGridSize=(8, 8))
-        enhanced = clahe.apply(filtered)
-        return enhanced
+
+        if len(image.shape) == 3 and image.shape[2] == 3 and self._has_colored_lines(image):
+            gray = np.min(image, axis=2)
+            return cv2.GaussianBlur(gray, (3, 3), 0)
+
+        return None

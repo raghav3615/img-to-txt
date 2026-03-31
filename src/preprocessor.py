@@ -22,10 +22,21 @@ class ImagePreprocessor:
                 f"Unsupported format '{path.suffix}'. "
                 f"Supported: {', '.join(sorted(self.SUPPORTED_FORMATS))}"
             )
-        image = cv2.imread(str(path))
+        image = cv2.imread(str(path), cv2.IMREAD_UNCHANGED)
         if image is None:
             raise IOError(f"Failed to read image: {image_path}")
+        if len(image.shape) == 3 and image.shape[2] == 4:
+            image = self._flatten_alpha(image)
         return image
+
+    @staticmethod
+    def _flatten_alpha(image: np.ndarray) -> np.ndarray:
+        """Composite a BGRA image onto a white background."""
+        alpha = image[:, :, 3].astype(np.float32) / 255.0
+        bgr = image[:, :, :3].astype(np.float32)
+        white = np.full_like(bgr, 255.0)
+        blended = bgr * alpha[:, :, np.newaxis] + white * (1 - alpha[:, :, np.newaxis])
+        return blended.astype(np.uint8)
 
     def to_grayscale(self, image: np.ndarray) -> np.ndarray:
         if len(image.shape) == 2:

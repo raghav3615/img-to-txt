@@ -22,12 +22,11 @@ def build_parser() -> argparse.ArgumentParser:
         epilog=(
             "Examples:\n"
             "  python main.py image.png\n"
-            "  python main.py image.jpg -l en hi -o result.txt\n"
-            "  python main.py scan.png -l ch_sim en --detail --format json\n"
-            "  python main.py handwritten.png -l hi en --handwritten\n"
+            "  python main.py image.jpg -o result.txt\n"
+            "  python main.py scan.png --detail --format json\n"
+            "  python main.py handwritten.png --handwritten\n"
             "  python main.py document.tiff --preprocess full --format csv -o output/result\n"
-            "  python main.py --languages\n"
-            "  python main.py --batch images/ -l en fr\n"
+            "  python main.py --batch images/\n"
         ),
     )
 
@@ -35,9 +34,9 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "-l", "--lang",
         nargs="+",
-        default=["en"],
+        default=["en", "hi"],
         metavar="CODE",
-        help="Language codes for OCR (default: en). Use --languages to list all.",
+        help="Language codes for OCR (default: en hi). Use --languages to list all.",
     )
     parser.add_argument(
         "-o", "--output",
@@ -58,8 +57,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--preprocess",
         choices=["full", "light", "none"],
-        default="full",
-        help="Preprocessing level: full (all steps), light (grayscale+contrast), none",
+        default="light",
+        help="Preprocessing level: light (grayscale+contrast, default), full (all steps), none",
     )
     parser.add_argument(
         "--gpu",

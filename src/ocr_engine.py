@@ -4,7 +4,7 @@ from typing import Optional
 
 
 class OCREngine:
-    DEFAULT_LANGUAGES = ["en"]
+    DEFAULT_LANGUAGES = ["en", "hi"]
 
     def __init__(self, languages: Optional[list[str]] = None, gpu: bool = False):
         self.languages = languages or self.DEFAULT_LANGUAGES

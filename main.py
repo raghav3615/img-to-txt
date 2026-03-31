@@ -31,6 +31,7 @@ def build_parser() -> argparse.ArgumentParser:
             "  python main.py image.png\n"
             "  python main.py image.jpg -l en hi -o result.txt\n"
             "  python main.py scan.png -l ch_sim en --detail --format json\n"
+            "  python main.py handwritten.png -l hi en --handwritten\n"
             "  python main.py document.tiff --preprocess full --format csv -o output/result\n"
             "  python main.py --languages\n"
             "  python main.py --batch images/ -l en fr\n"
@@ -83,6 +84,11 @@ def build_parser() -> argparse.ArgumentParser:
         help="Process all images in a directory",
     )
     parser.add_argument(
+        "--handwritten",
+        action="store_true",
+        help="Optimize for handwritten text (softer preprocessing, tuned OCR params)",
+    )
+    parser.add_argument(
         "--no-save",
         action="store_true",
         help="Print results to console only, do not save to file",
@@ -97,7 +103,12 @@ def process_single_image(
     engine: OCREngine,
     preprocess_mode: str,
     detail: bool,
+    handwritten: bool = False,
 ) -> list:
+    if handwritten:
+        processed = preprocessor.process_handwritten(image_path)
+        return engine.extract_text(processed, detail=detail, handwritten=True)
+
     if preprocess_mode == "full":
         processed = preprocessor.process(image_path)
     elif preprocess_mode == "light":
@@ -113,11 +124,13 @@ def run_single(args: argparse.Namespace) -> None:
     engine = OCREngine(languages=args.lang, gpu=args.gpu)
     preprocessor = ImagePreprocessor()
 
-    print(f"[*] Processing: {args.image}")
+    mode_label = "handwritten" if args.handwritten else args.preprocess
+    print(f"[*] Processing ({mode_label}): {args.image}")
     start = time.time()
 
     results = process_single_image(
-        args.image, preprocessor, engine, args.preprocess, args.detail
+        args.image, preprocessor, engine, args.preprocess, args.detail,
+        handwritten=args.handwritten,
     )
     elapsed = time.time() - start
 
@@ -128,7 +141,8 @@ def run_single(args: argparse.Namespace) -> None:
     use_detail = args.detail or args.format in ("json", "csv")
     if use_detail and not args.detail:
         results = process_single_image(
-            args.image, preprocessor, engine, args.preprocess, detail=True
+            args.image, preprocessor, engine, args.preprocess, detail=True,
+            handwritten=args.handwritten,
         )
 
     output_text = format_results(results, detailed=use_detail)
@@ -168,7 +182,8 @@ def run_batch(args: argparse.Namespace) -> None:
 
         try:
             results = process_single_image(
-                str(img_path), preprocessor, engine, args.preprocess, args.detail
+                str(img_path), preprocessor, engine, args.preprocess, args.detail,
+                handwritten=args.handwritten,
             )
         except Exception as e:
             print(f"  [!] Error: {e}")
@@ -183,7 +198,8 @@ def run_batch(args: argparse.Namespace) -> None:
         use_detail = args.detail or args.format in ("json", "csv")
         if use_detail and not args.detail:
             results = process_single_image(
-                str(img_path), preprocessor, engine, args.preprocess, detail=True
+                str(img_path), preprocessor, engine, args.preprocess, detail=True,
+                handwritten=args.handwritten,
             )
 
         output_text = format_results(results, detailed=use_detail)

@@ -68,9 +68,28 @@ class ImagePreprocessor:
         new_w, new_h = int(w * scale), int(h * scale)
         return cv2.resize(image, (new_w, new_h), interpolation=cv2.INTER_AREA)
 
+    def upscale_image(self, image: np.ndarray, min_dimension: int = 2000) -> np.ndarray:
+        h, w = image.shape[:2]
+        if min(h, w) >= min_dimension:
+            return image
+        scale = min_dimension / min(h, w)
+        new_w, new_h = int(w * scale), int(h * scale)
+        return cv2.resize(image, (new_w, new_h), interpolation=cv2.INTER_CUBIC)
+
     def enhance_contrast(self, image: np.ndarray) -> np.ndarray:
         clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
         return clahe.apply(image)
+
+    def remove_ruled_lines(self, image: np.ndarray) -> np.ndarray:
+        """Remove horizontal ruled lines from notebook/lined paper."""
+        horizontal_kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (image.shape[1] // 3, 1))
+        lines_mask = cv2.morphologyEx(image, cv2.MORPH_OPEN, horizontal_kernel, iterations=1)
+        _, lines_binary = cv2.threshold(lines_mask, 127, 255, cv2.THRESH_BINARY)
+        repair_kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (1, 3))
+        result = cv2.add(image, lines_binary)
+        result = np.clip(result, 0, 255).astype(np.uint8)
+        result = cv2.morphologyEx(result, cv2.MORPH_CLOSE, repair_kernel, iterations=1)
+        return result
 
     def process(self, image_path: str) -> np.ndarray:
         image = self.load_image(image_path)
@@ -95,3 +114,19 @@ class ImagePreprocessor:
         image = self.to_grayscale(image)
         image = self.enhance_contrast(image)
         return image
+
+    def process_handwritten(self, image_path: str) -> np.ndarray:
+        """Optimized for handwritten text on lined/plain paper.
+
+        Preserves stroke features while cleaning the background:
+        grayscale -> bilateral filter (edge-preserving smooth) -> CLAHE contrast.
+        Avoids binarization and heavy denoising to keep stroke texture intact
+        for the OCR model's neural network.
+        """
+        image = self.load_image(image_path)
+        image = self.resize_image(image)
+        gray = self.to_grayscale(image)
+        filtered = cv2.bilateralFilter(gray, 9, 75, 75)
+        clahe = cv2.createCLAHE(clipLimit=3.0, tileGridSize=(8, 8))
+        enhanced = clahe.apply(filtered)
+        return enhanced

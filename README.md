@@ -8,6 +8,7 @@ A computer vision project that extracts text from images using **OpenCV** for im
 - **Image Preprocessing Pipeline**: Grayscale conversion, adaptive thresholding, noise removal, skew correction, and contrast enhancement using OpenCV
 - **Multiple Output Formats**: Save results as plain text, JSON (with bounding boxes and confidence scores), or CSV
 - **Batch Processing**: Process all images in a directory with a single command
+- **Handwritten Text Support**: Dedicated preprocessing pipeline with bilateral filtering and line-grouping for handwritten documents
 - **Configurable Preprocessing**: Choose between full, light, or no preprocessing depending on image quality
 - **GPU Support**: Optional CUDA acceleration for faster OCR on large batches
 
@@ -117,6 +118,15 @@ python main.py image.png --format csv --detail   # CSV with confidence scores
 python main.py image.png -o results/extracted_text
 ```
 
+### Handwritten Text
+
+For handwritten documents (notebooks, letters, forms), use the `--handwritten` flag which applies a softer preprocessing pipeline and groups detected text into proper lines:
+
+```bash
+python main.py handwritten_note.png -l hi en --handwritten
+python main.py letter.jpg -l en --handwritten --format json --detail
+```
+
 ### Preprocessing Options
 
 ```bash
@@ -161,6 +171,7 @@ python main.py image.png --gpu
 | `--format` | Output format: `txt`, `json`, `csv` |
 | `--detail` | Include bounding boxes and confidence |
 | `--preprocess` | Preprocessing level: `full`, `light`, `none` |
+| `--handwritten` | Optimize for handwritten text |
 | `--gpu` | Enable CUDA GPU acceleration |
 | `--batch` | Process all images in a directory |
 | `--languages` | List supported language codes |
@@ -168,7 +179,9 @@ python main.py image.png --gpu
 
 ## Image Preprocessing Pipeline
 
-The preprocessing module applies the following computer vision techniques (configurable):
+### Standard Mode (`--preprocess full`)
+
+Applies the following computer vision techniques for printed text:
 
 1. **Resizing** — Scales large images to a maximum dimension to optimize processing
 2. **Grayscale Conversion** — Converts color images to single-channel grayscale
@@ -176,6 +189,16 @@ The preprocessing module applies the following computer vision techniques (confi
 4. **Denoising** — Non-local means denoising to remove image noise
 5. **Skew Correction** — Detects and corrects rotated text using minimum area rectangle fitting
 6. **Adaptive Thresholding** — Gaussian adaptive threshold for binarization, separating text from background
+
+### Handwritten Mode (`--handwritten`)
+
+Uses a softer pipeline designed to preserve pen stroke features:
+
+1. **Resizing** — Limits maximum dimension
+2. **Grayscale Conversion** — Single-channel conversion
+3. **Bilateral Filtering** — Edge-preserving smoothing that removes paper texture noise while keeping ink strokes sharp
+4. **CLAHE Contrast Enhancement** — Higher clip limit (3.0) to boost handwritten ink visibility
+5. **Line Grouping** — Post-OCR spatial analysis groups detected text boxes into proper lines by vertical position
 
 ## Supported Languages (Subset)
 

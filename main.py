@@ -14,6 +14,15 @@ from src.utils import (
 )
 
 
+def configure_console_encoding() -> None:
+    for stream in (sys.stdout, sys.stderr):
+        if hasattr(stream, "reconfigure"):
+            try:
+                stream.reconfigure(encoding="utf-8", errors="replace")
+            except Exception:
+                pass
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="ocr-extractor",
@@ -99,9 +108,7 @@ def process_single_image(
 ) -> list:
     if handwritten:
         processed = preprocessor.process_handwritten(image_path)
-        if processed is not None:
-            return engine.extract_text(processed, detail=detail, handwritten=True)
-        return engine.extract_from_file(image_path, detail=detail, handwritten=True)
+        return engine.extract_text(processed, detail=detail, handwritten=True)
 
     if preprocess_mode == "full":
         processed = preprocessor.process(image_path)
@@ -209,6 +216,8 @@ def run_batch(args: argparse.Namespace) -> None:
 
 
 def main() -> None:
+    configure_console_encoding()
+
     parser = build_parser()
     args = parser.parse_args()
 

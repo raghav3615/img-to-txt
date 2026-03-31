@@ -52,9 +52,20 @@ class ImagePreprocessor:
         )
 
     def correct_skew(self, image: np.ndarray) -> np.ndarray:
-        coords = np.column_stack(np.where(image > 0))
-        if len(coords) < 5:
+        if len(image.shape) == 3:
+            gray = self.to_grayscale(image)
+        else:
+            gray = image
+
+        blurred = cv2.GaussianBlur(gray, (5, 5), 0)
+        binary = cv2.threshold(
+            blurred, 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU
+        )[1]
+        coords = cv2.findNonZero(binary)
+
+        if coords is None or len(coords) < 5:
             return image
+
         angle = cv2.minAreaRect(coords)[-1]
         if angle < -45:
             angle = -(90 + angle)
@@ -106,23 +117,20 @@ class ImagePreprocessor:
 
     def _has_colored_lines(self, image: np.ndarray) -> bool:
         hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
+        hue = hsv[:, :, 0]
         saturation = hsv[:, :, 1]
-        high_sat_ratio = np.mean(saturation > 40)
-        return high_sat_ratio > 0.06
 
-    def process_handwritten(self, image_path: str) -> np.ndarray | None:
-        """Adaptive pipeline for handwritten text on lined or plain paper.
+        blue_band = (hue >= 90) & (hue <= 140)
+        red_band = (hue <= 12) | (hue >= 170)
+        ruled_line_mask = (saturation > 35) & (blue_band | red_band)
 
-        If colored ruled lines are detected, suppresses them via per-pixel RGB
-        minimum (colored pixels have at least one high channel; dark ink is low
-        in all three). Returns None when no preprocessing is beneficial, so the
-        caller can pass the raw file path directly to EasyOCR.
-        """
+        return float(np.mean(ruled_line_mask)) > 0.015
+
+    def process_handwritten(self, image_path: str) -> np.ndarray:
+        """Preprocess handwritten text while preserving thin pen strokes."""
         image = self.load_image(image_path)
         image = self.resize_image(image)
 
-        if len(image.shape) == 3 and image.shape[2] == 3 and self._has_colored_lines(image):
-            gray = np.min(image, axis=2)
-            return cv2.GaussianBlur(gray, (3, 3), 0)
-
-        return None
+        gray = self.to_grayscale(image)
+        gray = self.enhance_contrast(gray)
+        return cv2.GaussianBlur(gray, (3, 3), 0)

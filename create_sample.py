@@ -1,5 +1,3 @@
-"""Generate sample test images with text for OCR testing."""
-
 import numpy as np
 
 try:

@@ -4,8 +4,6 @@ from typing import Optional
 
 
 class OCREngine:
-    """Multilingual OCR engine powered by EasyOCR."""
-
     DEFAULT_LANGUAGES = ["en"]
 
     def __init__(self, languages: Optional[list[str]] = None, gpu: bool = False):
@@ -24,6 +22,20 @@ class OCREngine:
             return self._extract_detailed(image, handwritten)
         return self._extract_plain(image, handwritten)
 
+    def extract_from_file(
+        self, image_path: str, detail: bool = False, handwritten: bool = False
+    ) -> list:
+        kwargs = self._ocr_kwargs(handwritten)
+        results = self.reader.readtext(image_path, **kwargs)
+        if detail:
+            if handwritten and results:
+                return self._detailed_from_lines(results)
+            return self._format_detailed(results)
+        if handwritten and results:
+            lines = self._group_into_lines(results)
+            return [" ".join(e[4] for e in line) for line in lines]
+        return [entry[1] for entry in results]
+
     def _ocr_kwargs(self, handwritten: bool) -> dict:
         if handwritten:
             return {
@@ -37,10 +49,10 @@ class OCREngine:
         return {}
 
     def _group_into_lines(self, results: list) -> list:
-        """Group text boxes into lines by vertical position (y-center).
+        """Merge text boxes that share the same vertical band into lines.
 
-        Sorts boxes top-to-bottom then left-to-right, merging boxes that
-        share the same vertical band into one line of text.
+        Uses y-center proximity relative to box height as the grouping
+        threshold, then sorts each line left-to-right.
         """
         if not results:
             return results
@@ -69,11 +81,9 @@ class OCREngine:
                 current_line = [entry]
         lines.append(current_line)
 
-        merged = []
         for line in lines:
             line.sort(key=lambda e: e[1])
-            merged.append(line)
-        return merged
+        return lines
 
     def _extract_plain(self, image: np.ndarray, handwritten: bool = False) -> list[str]:
         kwargs = self._ocr_kwargs(handwritten)
@@ -110,21 +120,6 @@ class OCREngine:
             })
         return detailed
 
-    def extract_from_file(
-        self, image_path: str, detail: bool = False, handwritten: bool = False
-    ) -> list:
-        """Directly read and extract text from an image file without preprocessing."""
-        kwargs = self._ocr_kwargs(handwritten)
-        results = self.reader.readtext(image_path, **kwargs)
-        if detail:
-            if handwritten and results:
-                return self._detailed_from_lines(results)
-            return self._format_detailed(results)
-        if handwritten and results:
-            lines = self._group_into_lines(results)
-            return [" ".join(e[4] for e in line) for line in lines]
-        return [entry[1] for entry in results]
-
     def _format_detailed(self, results: list) -> list[dict]:
         detailed = []
         for bbox, text, confidence in results:
@@ -142,7 +137,6 @@ class OCREngine:
 
 
 def list_supported_languages() -> list[str]:
-    """Return all language codes supported by EasyOCR."""
     return [
         "ab", "af", "ar", "as", "az", "be", "bg", "bh", "bn", "bs",
         "ch_sim", "ch_tra", "cs", "cy", "da", "de", "en", "es", "et",

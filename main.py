@@ -1,10 +1,3 @@
-"""
-Multilingual OCR Image-to-Text Extractor
-
-A command-line tool that extracts text from images using computer vision
-preprocessing and EasyOCR with support for 80+ languages.
-"""
-
 import argparse
 import sys
 import time
@@ -86,7 +79,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--handwritten",
         action="store_true",
-        help="Optimize for handwritten text (softer preprocessing, tuned OCR params)",
+        help="Optimize for handwritten text (adaptive preprocessing, line grouping)",
     )
     parser.add_argument(
         "--no-save",

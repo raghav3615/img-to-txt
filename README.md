@@ -1,16 +1,16 @@
 # Multilingual OCR Image-to-Text Extractor
 
-A computer vision project that extracts text from images using **OpenCV** for image preprocessing and **EasyOCR** for multilingual optical character recognition. Supports **80+ languages** and provides a fully command-line driven interface.
+A computer vision project that extracts text from images using **OpenCV** for image preprocessing and **EasyOCR** for multilingual optical character recognition. Supports **80+ languages**, handwritten text, and provides a fully command-line driven interface.
 
 ## Features
 
-- **Multilingual OCR**: Extract text in 80+ languages including English, Hindi, Chinese, Arabic, Japanese, Korean, French, German, and more
-- **Image Preprocessing Pipeline**: Grayscale conversion, adaptive thresholding, noise removal, skew correction, and contrast enhancement using OpenCV
-- **Multiple Output Formats**: Save results as plain text, JSON (with bounding boxes and confidence scores), or CSV
-- **Batch Processing**: Process all images in a directory with a single command
-- **Handwritten Text Support**: Dedicated preprocessing pipeline with bilateral filtering and line-grouping for handwritten documents
-- **Configurable Preprocessing**: Choose between full, light, or no preprocessing depending on image quality
-- **GPU Support**: Optional CUDA acceleration for faster OCR on large batches
+- **Multilingual OCR** — Extract text in 80+ languages including English, Hindi, Chinese, Arabic, Japanese, Korean, French, German, and more
+- **Image Preprocessing Pipeline** — Grayscale conversion, adaptive thresholding, noise removal, skew correction, and CLAHE contrast enhancement using OpenCV
+- **Handwritten Text Support** — Adaptive preprocessing that detects and removes colored notebook lines via per-pixel RGB minimum, with spatial line-grouping of detected text boxes
+- **Multiple Output Formats** — Plain text, JSON (with bounding boxes and confidence scores), or CSV
+- **Batch Processing** — Process all images in a directory with a single command
+- **Configurable Preprocessing** — Full, light, or no preprocessing depending on image quality
+- **GPU Support** — Optional CUDA acceleration for faster OCR on large batches
 
 ## Project Structure
 
@@ -21,7 +21,7 @@ A computer vision project that extracts text from images using **OpenCV** for im
 │   ├── preprocessor.py     # OpenCV image preprocessing pipeline
 │   ├── ocr_engine.py       # EasyOCR multilingual text extraction
 │   └── utils.py            # Output formatting and file I/O
-├── create_sample.py        # Generate test images
+├── create_sample.py        # Generate test images with OpenCV
 ├── samples/                # Sample/test images
 ├── output/                 # Extracted text output (auto-created)
 ├── requirements.txt
@@ -78,7 +78,7 @@ This installs:
 python create_sample.py
 ```
 
-This creates `samples/sample_english.png` and `samples/sample_noisy.png` for testing.
+Creates `samples/sample_english.png` and `samples/sample_noisy.png` for testing.
 
 ## Usage
 
@@ -96,6 +96,15 @@ Extract text in multiple languages simultaneously:
 python main.py image.jpg -l en hi
 python main.py image.png -l ch_sim en
 python main.py image.png -l ar en fr
+```
+
+### Handwritten Text
+
+For handwritten documents (notebooks, letters, forms), use the `--handwritten` flag. It applies adaptive preprocessing and groups detected text into proper lines:
+
+```bash
+python main.py handwritten_note.png -l hi en --handwritten
+python main.py letter.jpg -l en --handwritten
 ```
 
 ### Detailed Output (Bounding Boxes + Confidence)
@@ -116,15 +125,6 @@ python main.py image.png --format csv --detail   # CSV with confidence scores
 
 ```bash
 python main.py image.png -o results/extracted_text
-```
-
-### Handwritten Text
-
-For handwritten documents (notebooks, letters, forms), use the `--handwritten` flag which applies a softer preprocessing pipeline and groups detected text into proper lines:
-
-```bash
-python main.py handwritten_note.png -l hi en --handwritten
-python main.py letter.jpg -l en --handwritten --format json --detail
 ```
 
 ### Preprocessing Options
@@ -181,24 +181,24 @@ python main.py image.png --gpu
 
 ### Standard Mode (`--preprocess full`)
 
-Applies the following computer vision techniques for printed text:
+For printed/digital text documents:
 
 1. **Resizing** — Scales large images to a maximum dimension to optimize processing
 2. **Grayscale Conversion** — Converts color images to single-channel grayscale
-3. **CLAHE Contrast Enhancement** — Applies Contrast Limited Adaptive Histogram Equalization for improved text visibility
+3. **CLAHE Contrast Enhancement** — Contrast Limited Adaptive Histogram Equalization for improved text visibility
 4. **Denoising** — Non-local means denoising to remove image noise
 5. **Skew Correction** — Detects and corrects rotated text using minimum area rectangle fitting
 6. **Adaptive Thresholding** — Gaussian adaptive threshold for binarization, separating text from background
 
 ### Handwritten Mode (`--handwritten`)
 
-Uses a softer pipeline designed to preserve pen stroke features:
+Adapts based on image content to preserve pen stroke features:
 
-1. **Resizing** — Limits maximum dimension
-2. **Grayscale Conversion** — Single-channel conversion
-3. **Bilateral Filtering** — Edge-preserving smoothing that removes paper texture noise while keeping ink strokes sharp
-4. **CLAHE Contrast Enhancement** — Higher clip limit (3.0) to boost handwritten ink visibility
-5. **Line Grouping** — Post-OCR spatial analysis groups detected text boxes into proper lines by vertical position
+1. **Colored Line Detection** — Analyzes HSV saturation to detect blue/red notebook ruled lines
+2. **RGB Minimum Channel** — If colored lines are found, takes the per-pixel minimum across R, G, B channels. Colored lines (which have at least one high channel value) fade to near-white, while dark ink (uniformly low across all channels) is preserved
+3. **Gaussian Smoothing** — Light 3×3 blur to reduce remaining paper texture noise
+4. **Raw Passthrough** — If no colored lines are detected, the unmodified image is passed directly to EasyOCR to preserve thin stroke detail
+5. **Line Grouping** — Post-OCR spatial analysis groups detected text boxes into proper lines by y-center proximity, then sorts each line left-to-right
 
 ## Supported Languages (Subset)
 
@@ -213,7 +213,7 @@ Uses a softer pipeline designed to preserve pen stroke features:
 | `ta` | Tamil | `te` | Telugu |
 | `bn` | Bengali | `mr` | Marathi |
 
-Run `python main.py --languages` for the full list.
+Run `python main.py --languages` for the full list of 82 supported languages.
 
 ## Example Output
 
@@ -242,9 +242,9 @@ OpenCV + EasyOCR
 
 ## Technical Details
 
-- **OCR Engine**: EasyOCR uses CRAFT (Character Region Awareness for Text Detection) for text detection and a CRNN-based model for text recognition
+- **OCR Engine**: EasyOCR uses CRAFT (Character Region Awareness for Text Detection) for text detection and a CRNN-based model for recognition
 - **Preprocessing**: OpenCV-based pipeline with configurable stages for handling different image qualities
-- **Architecture**: Modular design separating preprocessing, OCR, and output formatting concerns
+- **Architecture**: Modular design — `preprocessor.py` handles image cleaning, `ocr_engine.py` handles text extraction and line grouping, `utils.py` handles output formatting
 
 ## License
 
